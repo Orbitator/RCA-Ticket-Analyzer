@@ -80,3 +80,28 @@ Causes ermitteln, Präventionsmaßnahmen festhalten — wurde die App erweitert:
     „Fix-/Präventionsmaßnahme (verhindert Wiederholung)" gekennzeichnet.
     Ältere gespeicherte Datensätze werden um die neuen Felder ergänzt
     (Backfill), ohne bestehende Eingaben zu verlieren.
+
+12. **Kartenansicht.** Umschalter „Ansicht: Tabelle / Karten". Die
+    Kartenansicht respektiert Filter, Sortierung und Gruppierung
+    (Gruppentitel als Abschnittsüberschriften). Filter-, Sortier- und
+    Gruppierlogik ist in gemeinsame Helfer (`collectIdx`, `sortIdx`,
+    `orderedGroups`) ausgelagert, die beide Ansichten nutzen.
+
+13. **Titelleiste je Karte farblich einstellbar.** Farbwähler in der
+    Kartenkopfzeile (und in der Detailansicht); die gewählte Farbe wird pro
+    Ticket gespeichert (`color`). Die Textfarbe wird automatisch nach
+    Kontrast (Luminanz) gewählt.
+
+14. **Detailansicht (Modal).** Klick auf eine Karte öffnet ein Modal mit
+    Metadaten und dem vollständigen, editierbaren Feedback-Formular
+    (gemeinsame `feedbackFormHTML`-Funktion für Tabelle und Modal).
+    Schließen per Button, Hintergrund-Klick oder Esc.
+
+15. **Backup & Migration – Tickets überleben neue Versionen.** Die
+    localStorage-Schlüssel (`itasManualTickets`, `itasRcaFeedback`) sind
+    versionsstabil, sodass eine ausgetauschte HTML-Datei am selben Ort die
+    Daten behält. Zusätzlich exportiert/importiert „5. Backup & Migration"
+    ein vollständiges JSON (manuelle Tickets **und** Feedback) für den Umzug
+    auf neue Versionen oder andere Rechner. Import führt additiv zusammen und
+    akzeptiert auch ältere reine Feedback-Exporte. (Ende-zu-Ende getestet:
+    leerer Speicher → Import → alle Tickets inkl. Farbe/Bewertung wieder da.)

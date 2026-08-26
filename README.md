@@ -16,6 +16,12 @@ Ressourcenverbrauch, Komplexität, Priorität, Präventionsmaßnahme, Notizen).
   als konsolidierte Tabellenansicht mit Gruppenköpfen.
 - **Priorisierung & Sortierung**: nach Impact, Ressourcenverbrauch, Komplexität
   oder RCA-Häufigkeit.
+- **Tabellen- und Kartenansicht**: umschaltbar; Karten mit je Ticket frei
+  einstellbarer Titelleisten-Farbe. Klick auf eine Karte öffnet die
+  Detailansicht mit dem vollständigen Feedback-Formular.
+- **Backup & Migration**: manuelle Tickets und Feedback bleiben versionsstabil
+  im Browser erhalten; ein vollständiges Backup (JSON) übernimmt alle Daten in
+  eine neue Version oder auf einen anderen Rechner.
 
 ## Nutzung
 
