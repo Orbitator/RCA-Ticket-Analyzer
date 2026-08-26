@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ITAS RCA Analyzer</title>
+<style>
+body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}header{background:#17365d;color:white;padding:18px 24px}main{max-width:1500px;margin:auto;padding:18px}.card{background:white;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 5px #0002}button{background:#1f6feb;color:#fff;border:0;border-radius:5px;padding:8px 12px;margin:3px;cursor:pointer}button.secondary{background:#64748b}button.danger{background:#b42318}input,select,textarea{padding:7px;border:1px solid #b8c2cc;border-radius:4px;box-sizing:border-box}textarea{width:100%;min-height:55px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d8dee4;padding:6px;vertical-align:top;text-align:left}th{background:#eaf0f6;position:sticky;top:0}.scroll{overflow:auto;max-height:560px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.metric{font-size:25px;font-weight:bold;color:#17365d}.muted{color:#667085}.tag{display:inline-block;padding:3px 7px;border-radius:10px;background:#e7f0ff;margin:2px}.ok{background:#dcfce7}.warn{background:#fff4cc}.bad{background:#fee4e2}.hidden{display:none}.small{font-size:12px}label{font-weight:bold;font-size:12px;display:block;margin-bottom:3px}.drop{border:2px dashed #94a3b8;padding:18px;text-align:center;border-radius:8px}
+</style>
+</head>
+<body>
+<header><h1>ITAS RCA Analyzer – portable</h1><div>CSV analysieren, wiederkehrende Muster priorisieren und Feedback je Ticket erfassen</div></header>
+<main>
+<div class="card">
+<h2>1. Jira-Tickets laden</h2>
+<div class="drop" id="ticketDrop">CSV hier ablegen oder <input type="file" id="ticketFile" accept=".csv,.txt"></div>
+<p class="small muted">Die Analyse startet automatisch nach dem Einlesen. Unterstützt Komma-, Semikolon- und Tabulator-Trennung sowie UTF-8/Windows-1252. Mehrzeilige Felder (Beschreibungen) werden korrekt eingelesen.</p>
+</div>
+<div class="card">
+<h2>2. Feedback-Datei laden</h2>
+<input type="file" id="feedbackFile" accept=".csv,.json,.txt">
+<button class="secondary" id="loadFeedbackBtn">Feedback-Datei laden</button>
+<p class="small muted">Feedback-Datei kann CSV oder JSON sein. Bestehende Einträge werden anhand des Ticket-Schlüssels aktualisiert. Es werden keine vorgefüllten Personen- oder Beispiel-Feedbacks geladen.</p>
+</div>
+<div class="card">
+<h2>Analyse</h2>
+<div class="grid" id="metrics"><div><div class="metric">0</div>Tickets</div></div>
+<p id="analysisNote" class="muted">Noch keine CSV geladen.</p>
+<div id="groups"></div>
+</div>
+<div class="card">
+<h2>3. Ticket-Feedback</h2>
+<div class="grid">
+<div><label>Min. ähnliche Tickets für RCA-Fokus</label><input id="minFreq" type="number" min="1" value="2"></div>
+<div><label>Filter</label><input id="ticketFilter" placeholder="Ticket, Summary, Root Cause …"></div>
+</div>
+<p class="small muted">Für jedes geladene Ticket wird automatisch ein Feedback-Datensatz erzeugt. Die RCA-Priorität wird nach Häufigkeit systemischer Muster bewertet.</p>
+<div class="scroll"><table id="ticketTable"><thead><tr><th>Ticket</th><th>Summary</th><th>Typ/Status</th><th>Muster</th><th>RCA-Fokus</th><th>Feedback</th></tr></thead><tbody></tbody></table></div>
+</div>
+<div class="card">
+<h2>4. Daten speichern / exportieren</h2>
+<button id="saveBtn">Feedback lokal speichern</button>
+<button id="exportBtn">Feedback als CSV exportieren</button>
+<button id="jsonBtn">Feedback als JSON exportieren</button>
+<button class="secondary" id="clearBtn">Feedback löschen</button>
+<p id="saveNote" class="small muted"></p>
+</div>
+</main>
+<script>
+"use strict";
+const S={tickets:[],feedback:{},groups:{},patterns:[],keys:[],delimiter:","};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
+
+// --- Robust storage (file:// / private mode can throw) ---
+function persist(){try{localStorage.setItem("itasRcaFeedback",JSON.stringify(S.feedback));return true}catch(e){return false}}
+function loadStored(){try{return JSON.parse(localStorage.getItem("itasRcaFeedback")||"{}")||{}}catch(e){return {}}}
+
+// --- CSV: single quote-aware pass; supports embedded newlines and ; , \t ---
+function detectDelim(text){
+ let counts={",":0,";":0,"\t":0},q=false;
+ for(let i=0;i<text.length;i++){let c=text[i];
+  if(c==='"'){if(q&&text[i+1]==='"'){i++}else q=!q}
+  else if(!q&&c==="\n")break;
+  else if(!q&&(c===","||c===";"||c==="\t"))counts[c]++;
+ }
+ if(counts[";"]>counts[","]&&counts[";"]>=counts["\t"])return ";";
+ if(counts["\t"]>counts[","]&&counts["\t"]>=counts[";"])return "\t";
+ return ",";
+}
+function parseCSV(text){
+ text=String(text||"").replace(/^﻿/,"").replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+ if(!text.trim())return {rows:[],headers:[],delimiter:","};
+ const delim=detectDelim(text);
+ let rows=[],row=[],cell="",q=false;
+ for(let i=0;i<text.length;i++){let c=text[i],n=text[i+1];
+  if(c==='"'){if(q&&n==='"'){cell+='"';i++}else q=!q}
+  else if(c===delim&&!q){row.push(cell);cell=""}
+  else if(c==="\n"&&!q){row.push(cell);rows.push(row);row=[];cell=""}
+  else cell+=c;
+ }
+ row.push(cell);if(row.length>1||row[0]!=="")rows.push(row);
+ const headers=(rows.shift()||[]).map((x,i)=>x.trim()||("Spalte_"+i));
+ const data=rows.filter(r=>r.some(x=>x.trim()!==""))
+   .map(r=>Object.fromEntries(headers.map((h,i)=>[h,(r[i]??"").trim()])));
+ return {rows:data,headers,delimiter:delim};
+}
+
+function get(o,names){let k=Object.keys(o).find(k=>names.some(n=>k.toLowerCase().replace(/[^a-z0-9]/g,"").includes(n)));return k?o[k]:""}
+function norm(s){return String(s||"").toLowerCase().replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss").replace(/[^a-z0-9]+/g," ").trim()}
+function issue(r){return get(r,["vorgangsschluessel","issuekey","ticket","key"])||get(r,["vorgangsid","issueid"])}
+function summary(r){return get(r,["zusammenfassung","summary","titel","title"])}
+function type(r){return get(r,["vorgangstyp","issuetype","type"])}
+function status(r){return get(r,["status","state"])}
+function creator(r){return get(r,["ersteller","creator","author","autor"])}
+function assignee(r){return get(r,["zugewieseneperson","assignee","bearbeiter"])}
+const PATTERN_KEYS=[["vpn","VPN"],["forti","FortiClient"],["mention","Mention"],["intune","Intune"],["roomz","RoomZ"],["mailbox","Shared Mailbox"],["postfach","Shared Mailbox"],["outlook","Outlook/Mail"],["drucker","Printing"],["druck","Printing"],["access","Access/Permissions"],["zugriff","Access/Permissions"],["berechtig","Access/Permissions"],["employee","Employee Lifecycle"],["mitarbeiter","Employee Lifecycle"],["onboard","Employee Lifecycle"],["lizenz","Licensing"],["license","Licensing"],["dns","DNS/Web"],["cname","DNS/Web"],["elo","ELO"],["server","Server/Backup"]];
+function pattern(r){
+ let s=norm(summary(r)+" "+get(r,["beschreibung","description"]));
+ for(let [k,v] of PATTERN_KEYS)if(s.includes(k))return v;
+ return norm(summary(r)).split(" ").slice(0,4).join(" ")||"Unclassified";
+}
+
+function analyse(){
+ let min=+$("minFreq").value||2;
+ // Compute patterns and keys once per ticket, then group by pattern.
+ S.groups={};S.patterns=new Array(S.tickets.length);S.keys=new Array(S.tickets.length);
+ S.tickets.forEach((r,i)=>{
+  let p=pattern(r);S.patterns[i]=p;S.keys[i]=issue(r)||("ROW-"+(i+1));
+  (S.groups[p]??=[]).push(i);
+ });
+ ensureFeedback(min);
+ let incidents=0,open=0;
+ S.tickets.forEach(r=>{if(norm(type(r)).includes("incident"))incidents++;if(!/geschlossen|erledigt|fertig|closed|done|resolved/.test(norm(status(r))))open++});
+ let rcaPatterns=Object.values(S.groups).filter(a=>a.length>=min).length;
+ $("metrics").innerHTML=`<div><div class=metric>${S.tickets.length}</div>Tickets</div><div><div class=metric>${incidents}</div>Incidents</div><div><div class=metric>${open}</div>offen</div><div><div class=metric>${rcaPatterns}</div>RCA-Muster</div>`;
+ $("analysisNote").textContent=`Analyse erfolgreich: ${S.tickets.length} Datensätze, ${Object.keys(S.groups).length} Muster. RCA-Fokus ab ${min} ähnlichen Tickets.`;
+ let sorted=Object.entries(S.groups).sort((a,b)=>b[1].length-a[1].length);
+ $("groups").innerHTML="<h3>Wiederkehrende Muster</h3><div>"+sorted.map(([p,a])=>`<span class="tag ${a.length>=min?"ok":"warn"}">${esc(p)}: ${a.length} ${a.length>=min?"RCA-Fokus":"Einzelfall/geringe Häufigkeit"}</span>`).join("")+"</div>";
+ renderTable();
+}
+
+// Create a feedback record for EVERY ticket (independent of the filter) and
+// refresh the derived fields without overwriting user-entered content.
+function ensureFeedback(min){
+ min=min||(+$("minFreq").value||2);
+ S.tickets.forEach((r,i)=>{
+  let k=S.keys[i],p=S.patterns[i],cnt=S.groups[p]?.length||1;
+  if(!S.feedback[k]){
+   S.feedback[k]={ticket:k,summary:summary(r),type:type(r),status:status(r),creator:creator(r),assignee:assignee(r),pattern:p,similar_count:cnt,rca_focus:cnt>=min?"Ja":"Nein",rca_status:"Noch nicht bewertet",root_cause_family:"",root_cause:"",evidence:"",confidence:"",priority:cnt>=min?"P2":"P3",action:"",owner:"",linked_tickets:"",notes:""};
+  }else{
+   // Keep user edits; only refresh values derived from the current analysis.
+   let x=S.feedback[k];x.pattern=p;x.similar_count=cnt;x.rca_focus=cnt>=min?"Ja":"Nein";
+  }
+ });
+}
+
+function existing(key){return S.feedback[key]||{}}
+
+function rowHTML(i,min){
+ let k=S.keys[i],p=S.patterns[i],cnt=S.groups[p]?.length||1,x=S.feedback[k];
+ return `<tr><td><b>${esc(k)}</b><br><span class=small>${esc(x.creator)} → ${esc(x.assignee)}</span></td><td>${esc(x.summary)}</td><td>${esc(x.type)}<br>${esc(x.status)}</td><td>${esc(p)}<br>${cnt} ähnlich</td><td><span class="tag ${cnt>=min?"ok":"warn"}">${cnt>=min?"Ja":"Nein"}</span><br>${esc(x.priority)}</td><td>
+<div class=grid>
+<div><label>Status</label><select data-k="${esc(k)}" data-f="rca_status"><option>${esc(x.rca_status||"")}</option><option>Noch nicht bewertet</option><option>Unbestätigt</option><option>Hypothese</option><option>Bestätigt</option><option>Ursache unbekannt</option><option>Beobachten</option><option>Keine RCA-Maßnahme</option></select></div>
+<div><label>Familie</label><input data-k="${esc(k)}" data-f="root_cause_family" value="${esc(x.root_cause_family)}"></div>
+<div><label>Evidenz</label><select data-k="${esc(k)}" data-f="evidence"><option>${esc(x.evidence||"")}</option><option>Niedrig</option><option>Mittel</option><option>Hoch</option></select></div>
+<div><label>Priorität</label><select data-k="${esc(k)}" data-f="priority"><option>${esc(x.priority||"")}</option><option>P1</option><option>P2</option><option>P3</option><option>Keine Maßnahme</option></select></div>
+</div>
+<label>Bestätigte Root Cause / Hypothese</label><textarea data-k="${esc(k)}" data-f="root_cause">${esc(x.root_cause)}</textarea>
+<label>Fix-/Präventionsmaßnahme</label><textarea data-k="${esc(k)}" data-f="action">${esc(x.action)}</textarea>
+<label>Notizen / manuelles Investigativfeedback</label><textarea data-k="${esc(k)}" data-f="notes">${esc(x.notes)}</textarea>
+</td></tr>`;
+}
+
+function renderTable(){
+ let f=norm($("ticketFilter").value),min=+$("minFreq").value||2;
+ let body=$("ticketTable").querySelector("tbody");
+ let html="";
+ for(let i=0;i<S.tickets.length;i++){
+  let k=S.keys[i];
+  if(f&&!norm(JSON.stringify(S.tickets[i])+" "+JSON.stringify(existing(k))).includes(f))continue;
+  html+=rowHTML(i,min);
+ }
+ body.innerHTML=html; // single DOM write instead of per-row append
+}
+
+// One delegated change-listener for the whole table body (survives re-render).
+$("ticketTable").querySelector("tbody").addEventListener("change",e=>{
+ let el=e.target;if(!el.dataset||!el.dataset.f)return;
+ let rec=S.feedback[el.dataset.k];if(!rec)return;
+ rec[el.dataset.f]=el.value;persist();
+});
+
+function loadTicketText(text){let p=parseCSV(text);S.tickets=p.rows;S.delimiter=p.delimiter;analyse()}
+function csvOut(rows){if(!rows.length)return"";let h=Object.keys(rows[0]);let q=v=>`"${String(v??"").replace(/"/g,'""')}"`;return h.map(q).join(";")+"\n"+rows.map(r=>h.map(k=>q(r[k])).join(";")).join("\n")}
+function download(name,content,type="text/csv"){let a=document.createElement("a"),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+
+// Debounce the filter so typing does not re-render on every keystroke.
+let filterTimer=null;
+$("minFreq").onchange=analyse;
+$("ticketFilter").oninput=()=>{clearTimeout(filterTimer);filterTimer=setTimeout(renderTable,150)};
+$("ticketFile").onchange=e=>e.target.files[0]?.text().then(loadTicketText);
+$("ticketDrop").ondragover=e=>e.preventDefault();$("ticketDrop").ondrop=e=>{e.preventDefault();let f=e.dataTransfer.files[0];if(f)f.text().then(loadTicketText)};
+$("loadFeedbackBtn").onclick=()=>{let f=$("feedbackFile").files[0];if(!f)return alert("Bitte zuerst eine Feedback-Datei auswählen.");f.text().then(t=>{try{let data=f.name.toLowerCase().endsWith(".json")?JSON.parse(t):parseCSV(t).rows;(Array.isArray(data)?data:Object.values(data)).forEach(x=>{let k=x.ticket||x.Ticket||x.issuekey||x["Vorgangsschlüssel"];if(k)S.feedback[k]={...existing(k),...x}});persist();renderTable();$("saveNote").textContent="Feedback-Datei geladen und den Tickets zugeordnet."}catch(e){alert("Feedback-Datei konnte nicht gelesen werden.")}})};
+$("saveBtn").onclick=()=>{$("saveNote").textContent=persist()?"Feedback lokal im Browser gespeichert.":"Speichern fehlgeschlagen: lokaler Speicher ist nicht verfügbar (Export nutzen)."};
+$("exportBtn").onclick=()=>download("ITAS_RCA_Feedback.csv",csvOut(Object.values(S.feedback)));
+$("jsonBtn").onclick=()=>download("ITAS_RCA_Feedback.json",JSON.stringify(Object.values(S.feedback),null,2),"application/json");
+$("clearBtn").onclick=()=>{if(confirm("Alle Feedback-Einträge löschen?")){S.feedback={};try{localStorage.removeItem("itasRcaFeedback")}catch(e){}renderTable()}};
+S.feedback=loadStored();
+</script>
+</body></html>
