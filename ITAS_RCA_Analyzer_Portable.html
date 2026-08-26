@@ -5,16 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ITAS RCA Analyzer</title>
 <style>
-body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}header{background:#17365d;color:white;padding:18px 24px}main{max-width:1500px;margin:auto;padding:18px}.card{background:white;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 5px #0002}button{background:#1f6feb;color:#fff;border:0;border-radius:5px;padding:8px 12px;margin:3px;cursor:pointer}button.secondary{background:#64748b}button.danger{background:#b42318}input,select,textarea{padding:7px;border:1px solid #b8c2cc;border-radius:4px;box-sizing:border-box}textarea{width:100%;min-height:55px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d8dee4;padding:6px;vertical-align:top;text-align:left}th{background:#eaf0f6;position:sticky;top:0}.scroll{overflow:auto;max-height:560px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.metric{font-size:25px;font-weight:bold;color:#17365d}.muted{color:#667085}.tag{display:inline-block;padding:3px 7px;border-radius:10px;background:#e7f0ff;margin:2px}.ok{background:#dcfce7}.warn{background:#fff4cc}.bad{background:#fee4e2}.hidden{display:none}.small{font-size:12px}label{font-weight:bold;font-size:12px;display:block;margin-bottom:3px}.drop{border:2px dashed #94a3b8;padding:18px;text-align:center;border-radius:8px}
+body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}header{background:#17365d;color:white;padding:18px 24px}main{max-width:1500px;margin:auto;padding:18px}.card{background:white;border-radius:8px;padding:16px;margin-bottom:16px;box-shadow:0 1px 5px #0002}button{background:#1f6feb;color:#fff;border:0;border-radius:5px;padding:8px 12px;margin:3px;cursor:pointer}button.secondary{background:#64748b}button.danger{background:#b42318}input,select,textarea{padding:7px;border:1px solid #b8c2cc;border-radius:4px;box-sizing:border-box}textarea{width:100%;min-height:55px}table{width:100%;border-collapse:collapse;font-size:13px}th,td{border:1px solid #d8dee4;padding:6px;vertical-align:top;text-align:left}th{background:#eaf0f6;position:sticky;top:0}.scroll{overflow:auto;max-height:560px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.metric{font-size:25px;font-weight:bold;color:#17365d}.muted{color:#667085}.tag{display:inline-block;padding:3px 7px;border-radius:10px;background:#e7f0ff;margin:2px}.ok{background:#dcfce7}.warn{background:#fff4cc}.bad{background:#fee4e2}.hidden{display:none}.small{font-size:12px}label{font-weight:bold;font-size:12px;display:block;margin-bottom:3px}.drop{border:2px dashed #94a3b8;padding:18px;text-align:center;border-radius:8px}tr.grouphdr td{background:#dbe6f4;font-weight:bold;font-size:13px;position:sticky;top:29px}.rate{font-size:11px;color:#475467}.inline{display:flex;flex-wrap:wrap;gap:10px;align-items:end}
 </style>
 </head>
 <body>
-<header><h1>ITAS RCA Analyzer – portable</h1><div>CSV analysieren, wiederkehrende Muster priorisieren und Feedback je Ticket erfassen</div></header>
+<header><h1>ITAS RCA Analyzer – portable</h1><div>Incident-Tickets verwalten, Root Causes ermitteln und Präventionsmaßnahmen festhalten</div></header>
 <main>
 <div class="card">
 <h2>1. Jira-Tickets laden</h2>
 <div class="drop" id="ticketDrop">CSV hier ablegen oder <input type="file" id="ticketFile" accept=".csv,.txt"></div>
-<p class="small muted">Die Analyse startet automatisch nach dem Einlesen. Unterstützt Komma-, Semikolon- und Tabulator-Trennung sowie UTF-8/Windows-1252. Mehrzeilige Felder (Beschreibungen) werden korrekt eingelesen.</p>
+<p class="small muted">Die Analyse startet automatisch nach dem Einlesen. Unterstützt Komma-, Semikolon- und Tabulator-Trennung sowie UTF-8/Windows-1252. Mehrzeilige Felder (Beschreibungen) werden korrekt eingelesen. Importierte Tickets werden automatisch in Gruppen konsolidiert.</p>
+</div>
+<div class="card">
+<h2>1b. Incident manuell anlegen</h2>
+<div class="grid">
+<div><label>Ticket-Schlüssel (optional)</label><input id="mKey" placeholder="wird automatisch vergeben"></div>
+<div><label>Zusammenfassung</label><input id="mSummary" placeholder="Kurzbeschreibung des Incidents"></div>
+<div><label>Typ</label><input id="mType" value="Incident"></div>
+<div><label>Status</label><input id="mStatus" value="Offen"></div>
+</div>
+<label>Beschreibung</label><textarea id="mDesc" placeholder="Details, betroffene Systeme, Symptome …"></textarea>
+<button id="addTicketBtn">Incident hinzufügen</button>
+<button class="secondary" id="clearManualBtn">Manuelle Tickets löschen</button>
+<p id="manualNote" class="small muted"></p>
 </div>
 <div class="card">
 <h2>2. Feedback-Datei laden</h2>
@@ -25,17 +38,19 @@ body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}head
 <div class="card">
 <h2>Analyse</h2>
 <div class="grid" id="metrics"><div><div class="metric">0</div>Tickets</div></div>
-<p id="analysisNote" class="muted">Noch keine CSV geladen.</p>
+<p id="analysisNote" class="muted">Noch keine Tickets geladen.</p>
 <div id="groups"></div>
 </div>
 <div class="card">
 <h2>3. Ticket-Feedback</h2>
-<div class="grid">
+<div class="inline">
 <div><label>Min. ähnliche Tickets für RCA-Fokus</label><input id="minFreq" type="number" min="1" value="2"></div>
-<div><label>Filter</label><input id="ticketFilter" placeholder="Ticket, Summary, Root Cause …"></div>
+<div><label>Sortieren nach</label><select id="sortBy"><option value="standard">Standard</option><option value="freq">RCA-Häufigkeit</option><option value="impact">Impact</option><option value="resource">Ressourcenverbrauch</option><option value="complexity">Komplexität</option></select></div>
+<div><label><input type="checkbox" id="groupBy" style="width:auto"> Nach Gruppe konsolidieren</label></div>
+<div style="flex:1;min-width:200px"><label>Filter</label><input id="ticketFilter" style="width:100%" placeholder="Ticket, Summary, Root Cause …"></div>
 </div>
-<p class="small muted">Für jedes geladene Ticket wird automatisch ein Feedback-Datensatz erzeugt. Die RCA-Priorität wird nach Häufigkeit systemischer Muster bewertet.</p>
-<div class="scroll"><table id="ticketTable"><thead><tr><th>Ticket</th><th>Summary</th><th>Typ/Status</th><th>Muster</th><th>RCA-Fokus</th><th>Feedback</th></tr></thead><tbody></tbody></table></div>
+<p class="small muted">Für jedes geladene Ticket wird automatisch ein Feedback-Datensatz erzeugt. Impact, Ressourcenverbrauch und Komplexität dienen der Priorisierung; die RCA-Priorität berücksichtigt zusätzlich die Häufigkeit systemischer Muster.</p>
+<div class="scroll"><table id="ticketTable"><thead><tr><th>Ticket</th><th>Summary</th><th>Typ/Status</th><th>Muster</th><th>RCA-Fokus / Bewertung</th><th>Feedback</th></tr></thead><tbody></tbody></table></div>
 </div>
 <div class="card">
 <h2>4. Daten speichern / exportieren</h2>
@@ -48,13 +63,15 @@ body{font-family:Arial,sans-serif;margin:0;background:#f4f6f8;color:#17202a}head
 </main>
 <script>
 "use strict";
-const S={tickets:[],feedback:{},groups:{},patterns:[],keys:[],delimiter:","};
+const S={imported:[],manual:[],tickets:[],feedback:{},groups:{},patterns:[],keys:[],delimiter:","};
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[m]));
 
 // --- Robust storage (file:// / private mode can throw) ---
 function persist(){try{localStorage.setItem("itasRcaFeedback",JSON.stringify(S.feedback));return true}catch(e){return false}}
 function loadStored(){try{return JSON.parse(localStorage.getItem("itasRcaFeedback")||"{}")||{}}catch(e){return {}}}
+function persistManual(){try{localStorage.setItem("itasManualTickets",JSON.stringify(S.manual))}catch(e){}}
+function loadManual(){try{let a=JSON.parse(localStorage.getItem("itasManualTickets")||"[]");return Array.isArray(a)?a:[]}catch(e){return []}}
 
 // --- CSV: single quote-aware pass; supports embedded newlines and ; , \t ---
 function detectDelim(text){
@@ -101,9 +118,16 @@ function pattern(r){
  return norm(summary(r)).split(" ").slice(0,4).join(" ")||"Unclassified";
 }
 
+// Impact / Ressourcenverbrauch / Komplexität as ordinal levels for sorting.
+const LVL={niedrig:1,mittel:2,hoch:3};
+function lvl(v){return LVL[norm(v)]||0}
+
+// Merge imported + manual tickets into the working set.
+function rebuild(){S.tickets=S.imported.concat(S.manual)}
+
 function analyse(){
+ rebuild();
  let min=+$("minFreq").value||2;
- // Compute patterns and keys once per ticket, then group by pattern.
  S.groups={};S.patterns=new Array(S.tickets.length);S.keys=new Array(S.tickets.length);
  S.tickets.forEach((r,i)=>{
   let p=pattern(r);S.patterns[i]=p;S.keys[i]=issue(r)||("ROW-"+(i+1));
@@ -113,10 +137,10 @@ function analyse(){
  let incidents=0,open=0;
  S.tickets.forEach(r=>{if(norm(type(r)).includes("incident"))incidents++;if(!/geschlossen|erledigt|fertig|closed|done|resolved/.test(norm(status(r))))open++});
  let rcaPatterns=Object.values(S.groups).filter(a=>a.length>=min).length;
- $("metrics").innerHTML=`<div><div class=metric>${S.tickets.length}</div>Tickets</div><div><div class=metric>${incidents}</div>Incidents</div><div><div class=metric>${open}</div>offen</div><div><div class=metric>${rcaPatterns}</div>RCA-Muster</div>`;
+ $("metrics").innerHTML=`<div><div class=metric>${S.tickets.length}</div>Tickets</div><div><div class=metric>${incidents}</div>Incidents</div><div><div class=metric>${open}</div>offen</div><div><div class=metric>${rcaPatterns}</div>RCA-Muster</div><div><div class=metric>${S.manual.length}</div>manuell</div>`;
  $("analysisNote").textContent=`Analyse erfolgreich: ${S.tickets.length} Datensätze, ${Object.keys(S.groups).length} Muster. RCA-Fokus ab ${min} ähnlichen Tickets.`;
  let sorted=Object.entries(S.groups).sort((a,b)=>b[1].length-a[1].length);
- $("groups").innerHTML="<h3>Wiederkehrende Muster</h3><div>"+sorted.map(([p,a])=>`<span class="tag ${a.length>=min?"ok":"warn"}">${esc(p)}: ${a.length} ${a.length>=min?"RCA-Fokus":"Einzelfall/geringe Häufigkeit"}</span>`).join("")+"</div>";
+ $("groups").innerHTML="<h3>Wiederkehrende Muster (Gruppen)</h3><div>"+sorted.map(([p,a])=>`<span class="tag ${a.length>=min?"ok":"warn"}">${esc(p)}: ${a.length} ${a.length>=min?"RCA-Fokus":"Einzelfall/geringe Häufigkeit"}</span>`).join("")+"</div>";
  renderTable();
 }
 
@@ -127,41 +151,75 @@ function ensureFeedback(min){
  S.tickets.forEach((r,i)=>{
   let k=S.keys[i],p=S.patterns[i],cnt=S.groups[p]?.length||1;
   if(!S.feedback[k]){
-   S.feedback[k]={ticket:k,summary:summary(r),type:type(r),status:status(r),creator:creator(r),assignee:assignee(r),pattern:p,similar_count:cnt,rca_focus:cnt>=min?"Ja":"Nein",rca_status:"Noch nicht bewertet",root_cause_family:"",root_cause:"",evidence:"",confidence:"",priority:cnt>=min?"P2":"P3",action:"",owner:"",linked_tickets:"",notes:""};
+   S.feedback[k]={ticket:k,summary:summary(r),type:type(r),status:status(r),creator:creator(r),assignee:assignee(r),pattern:p,similar_count:cnt,rca_focus:cnt>=min?"Ja":"Nein",rca_status:"Noch nicht bewertet",root_cause_family:"",root_cause:"",evidence:"",confidence:"",impact:"",resource:"",complexity:"",priority:cnt>=min?"P2":"P3",action:"",owner:"",linked_tickets:"",notes:""};
   }else{
-   // Keep user edits; only refresh values derived from the current analysis.
    let x=S.feedback[k];x.pattern=p;x.similar_count=cnt;x.rca_focus=cnt>=min?"Ja":"Nein";
+   // Backfill fields added in newer versions for older stored records.
+   if(x.impact===undefined)x.impact="";if(x.resource===undefined)x.resource="";if(x.complexity===undefined)x.complexity="";
   }
  });
 }
 
 function existing(key){return S.feedback[key]||{}}
+function lvlSel(k,field,val){
+ let opts=["","Niedrig","Mittel","Hoch"].map(o=>`<option ${o===(val||"")?"selected":""}>${o}</option>`).join("");
+ return `<select data-k="${esc(k)}" data-f="${field}">${opts}</select>`;
+}
 
 function rowHTML(i,min){
  let k=S.keys[i],p=S.patterns[i],cnt=S.groups[p]?.length||1,x=S.feedback[k];
- return `<tr><td><b>${esc(k)}</b><br><span class=small>${esc(x.creator)} → ${esc(x.assignee)}</span></td><td>${esc(x.summary)}</td><td>${esc(x.type)}<br>${esc(x.status)}</td><td>${esc(p)}<br>${cnt} ähnlich</td><td><span class="tag ${cnt>=min?"ok":"warn"}">${cnt>=min?"Ja":"Nein"}</span><br>${esc(x.priority)}</td><td>
+ return `<tr><td><b>${esc(k)}</b><br><span class=small>${esc(x.creator)} → ${esc(x.assignee)}</span></td><td>${esc(x.summary)}</td><td>${esc(x.type)}<br>${esc(x.status)}</td><td>${esc(p)}<br>${cnt} ähnlich</td><td><span class="tag ${cnt>=min?"ok":"warn"}">${cnt>=min?"Ja":"Nein"}</span><br>${esc(x.priority)}<br><span class=rate>Impact: ${esc(x.impact||"–")} · Ressourcen: ${esc(x.resource||"–")} · Komplexität: ${esc(x.complexity||"–")}</span></td><td>
 <div class=grid>
 <div><label>Status</label><select data-k="${esc(k)}" data-f="rca_status"><option>${esc(x.rca_status||"")}</option><option>Noch nicht bewertet</option><option>Unbestätigt</option><option>Hypothese</option><option>Bestätigt</option><option>Ursache unbekannt</option><option>Beobachten</option><option>Keine RCA-Maßnahme</option></select></div>
 <div><label>Familie</label><input data-k="${esc(k)}" data-f="root_cause_family" value="${esc(x.root_cause_family)}"></div>
 <div><label>Evidenz</label><select data-k="${esc(k)}" data-f="evidence"><option>${esc(x.evidence||"")}</option><option>Niedrig</option><option>Mittel</option><option>Hoch</option></select></div>
 <div><label>Priorität</label><select data-k="${esc(k)}" data-f="priority"><option>${esc(x.priority||"")}</option><option>P1</option><option>P2</option><option>P3</option><option>Keine Maßnahme</option></select></div>
+<div><label>Impact</label>${lvlSel(k,"impact",x.impact)}</div>
+<div><label>Ressourcenverbrauch</label>${lvlSel(k,"resource",x.resource)}</div>
+<div><label>Komplexität</label>${lvlSel(k,"complexity",x.complexity)}</div>
 </div>
 <label>Bestätigte Root Cause / Hypothese</label><textarea data-k="${esc(k)}" data-f="root_cause">${esc(x.root_cause)}</textarea>
-<label>Fix-/Präventionsmaßnahme</label><textarea data-k="${esc(k)}" data-f="action">${esc(x.action)}</textarea>
+<label>Fix-/Präventionsmaßnahme (verhindert Wiederholung)</label><textarea data-k="${esc(k)}" data-f="action">${esc(x.action)}</textarea>
 <label>Notizen / manuelles Investigativfeedback</label><textarea data-k="${esc(k)}" data-f="notes">${esc(x.notes)}</textarea>
 </td></tr>`;
 }
 
+function metricOf(i,sort){
+ let x=S.feedback[S.keys[i]]||{};
+ if(sort==="impact")return lvl(x.impact);
+ if(sort==="resource")return lvl(x.resource);
+ if(sort==="complexity")return lvl(x.complexity);
+ if(sort==="freq")return S.groups[S.patterns[i]]?.length||1;
+ return 0;
+}
+
 function renderTable(){
  let f=norm($("ticketFilter").value),min=+$("minFreq").value||2;
- let body=$("ticketTable").querySelector("tbody");
- let html="";
+ let sort=$("sortBy").value,grouped=$("groupBy").checked;
+ let idx=[];
  for(let i=0;i<S.tickets.length;i++){
   let k=S.keys[i];
   if(f&&!norm(JSON.stringify(S.tickets[i])+" "+JSON.stringify(existing(k))).includes(f))continue;
-  html+=rowHTML(i,min);
+  idx.push(i);
  }
- body.innerHTML=html; // single DOM write instead of per-row append
+ let html;
+ if(grouped){
+  let gmap={};idx.forEach(i=>{(gmap[S.patterns[i]]??=[]).push(i)});
+  let groups=Object.entries(gmap);
+  // Order groups: by chosen dimension (max within group) if any, else by size.
+  let gOrder=arr=>sort==="standard"||sort==="freq"?arr.length:Math.max(...arr.map(i=>metricOf(i,sort)),0);
+  groups.sort((a,b)=>gOrder(b[1])-gOrder(a[1]));
+  html=groups.map(([p,arr])=>{
+   if(sort!=="standard")arr.sort((a,b)=>metricOf(b,sort)-metricOf(a,sort));
+   let cnt=S.groups[p]?.length||arr.length,focus=cnt>=min;
+   let hdr=`<tr class="grouphdr"><td colspan="6">${esc(p)} — ${arr.length} angezeigt / ${cnt} gesamt <span class="tag ${focus?"ok":"warn"}">${focus?"RCA-Fokus":"Einzelfall"}</span></td></tr>`;
+   return hdr+arr.map(i=>rowHTML(i,min)).join("");
+  }).join("");
+ }else{
+  if(sort!=="standard")idx.sort((a,b)=>metricOf(b,sort)-metricOf(a,sort));
+  html=idx.map(i=>rowHTML(i,min)).join("");
+ }
+ $("ticketTable").querySelector("tbody").innerHTML=html;
 }
 
 // One delegated change-listener for the whole table body (survives re-render).
@@ -169,23 +227,45 @@ $("ticketTable").querySelector("tbody").addEventListener("change",e=>{
  let el=e.target;if(!el.dataset||!el.dataset.f)return;
  let rec=S.feedback[el.dataset.k];if(!rec)return;
  rec[el.dataset.f]=el.value;persist();
+ // Re-sort/regroup when a sortable dimension changes and sorting is active.
+ if(["impact","resource","complexity"].includes(el.dataset.f)&&$("sortBy").value!=="standard")renderTable();
 });
 
-function loadTicketText(text){let p=parseCSV(text);S.tickets=p.rows;S.delimiter=p.delimiter;analyse()}
+function loadTicketText(text){let p=parseCSV(text);S.imported=p.rows;S.delimiter=p.delimiter;analyse()}
 function csvOut(rows){if(!rows.length)return"";let h=Object.keys(rows[0]);let q=v=>`"${String(v??"").replace(/"/g,'""')}"`;return h.map(q).join(";")+"\n"+rows.map(r=>h.map(k=>q(r[k])).join(";")).join("\n")}
 function download(name,content,type="text/csv"){let a=document.createElement("a"),url=URL.createObjectURL(new Blob([content],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
 
-// Debounce the filter so typing does not re-render on every keystroke.
+// --- Manual ticket creation ---
+function addManualTicket(){
+ let sum=$("mSummary").value.trim();
+ if(!sum)return alert("Bitte eine Zusammenfassung eingeben.");
+ let key=$("mKey").value.trim()||("INC-M"+Date.now().toString(36).slice(-5).toUpperCase());
+ if(S.manual.some(t=>t.Ticket===key)||S.imported.some(r=>issue(r)===key))return alert("Ticket-Schlüssel existiert bereits: "+key);
+ S.manual.push({Ticket:key,Summary:sum,Type:$("mType").value.trim()||"Incident",Status:$("mStatus").value.trim()||"Offen",Description:$("mDesc").value.trim()});
+ persistManual();
+ $("mKey").value="";$("mSummary").value="";$("mDesc").value="";$("mType").value="Incident";$("mStatus").value="Offen";
+ $("manualNote").textContent=`Incident ${key} hinzugefügt (${S.manual.length} manuelle Tickets).`;
+ analyse();
+}
+
 let filterTimer=null;
 $("minFreq").onchange=analyse;
+$("sortBy").onchange=renderTable;
+$("groupBy").onchange=renderTable;
 $("ticketFilter").oninput=()=>{clearTimeout(filterTimer);filterTimer=setTimeout(renderTable,150)};
 $("ticketFile").onchange=e=>e.target.files[0]?.text().then(loadTicketText);
 $("ticketDrop").ondragover=e=>e.preventDefault();$("ticketDrop").ondrop=e=>{e.preventDefault();let f=e.dataTransfer.files[0];if(f)f.text().then(loadTicketText)};
+$("addTicketBtn").onclick=addManualTicket;
+$("clearManualBtn").onclick=()=>{if(S.manual.length&&confirm("Alle manuell angelegten Tickets löschen?")){S.manual=[];persistManual();analyse();$("manualNote").textContent="Manuelle Tickets gelöscht."}};
 $("loadFeedbackBtn").onclick=()=>{let f=$("feedbackFile").files[0];if(!f)return alert("Bitte zuerst eine Feedback-Datei auswählen.");f.text().then(t=>{try{let data=f.name.toLowerCase().endsWith(".json")?JSON.parse(t):parseCSV(t).rows;(Array.isArray(data)?data:Object.values(data)).forEach(x=>{let k=x.ticket||x.Ticket||x.issuekey||x["Vorgangsschlüssel"];if(k)S.feedback[k]={...existing(k),...x}});persist();renderTable();$("saveNote").textContent="Feedback-Datei geladen und den Tickets zugeordnet."}catch(e){alert("Feedback-Datei konnte nicht gelesen werden.")}})};
 $("saveBtn").onclick=()=>{$("saveNote").textContent=persist()?"Feedback lokal im Browser gespeichert.":"Speichern fehlgeschlagen: lokaler Speicher ist nicht verfügbar (Export nutzen)."};
 $("exportBtn").onclick=()=>download("ITAS_RCA_Feedback.csv",csvOut(Object.values(S.feedback)));
 $("jsonBtn").onclick=()=>download("ITAS_RCA_Feedback.json",JSON.stringify(Object.values(S.feedback),null,2),"application/json");
 $("clearBtn").onclick=()=>{if(confirm("Alle Feedback-Einträge löschen?")){S.feedback={};try{localStorage.removeItem("itasRcaFeedback")}catch(e){}renderTable()}};
+
+// --- Init ---
 S.feedback=loadStored();
+S.manual=loadManual();
+if(S.manual.length)analyse();
 </script>
 </body></html>

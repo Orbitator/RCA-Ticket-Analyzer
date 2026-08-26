@@ -51,5 +51,32 @@ identifiziert und behoben.
    Nutzer gemeldet (Export als Ausweichweg). `Object-URLs` werden nach dem
    Download freigegeben.
 
-Verhalten, Oberfläche und die Offline-/Portabilitäts-Eigenschaft bleiben
-unverändert.
+Die Offline-/Portabilitäts-Eigenschaft bleibt unverändert.
+
+## Neue Funktionen (Incident-Management)
+
+Auf Basis der geschärften Aufgabenstellung — Incident-Tickets verwalten, Root
+Causes ermitteln, Präventionsmaßnahmen festhalten — wurde die App erweitert:
+
+8. **Manuelle Incident-Anlage.** Neue Karte „1b. Incident manuell anlegen"
+   (Schlüssel optional/auto-vergeben, Zusammenfassung, Typ, Status,
+   Beschreibung). Manuelle Tickets werden in `localStorage`
+   (`itasManualTickets`) gespeichert, beim Start geladen und gemeinsam mit den
+   importierten Tickets (`rebuild()`) analysiert. Doppelte Schlüssel werden
+   abgewiesen.
+
+9. **Konsolidierung in Gruppen.** Umschalter „Nach Gruppe konsolidieren"
+   fasst die Tabelle nach erkanntem Muster/Root-Cause-Gruppe zusammen — mit
+   Gruppenkopf (Anzahl angezeigt/gesamt, RCA-Fokus vs. Einzelfall) für einen
+   übersichtlichen Bearbeitungsfluss.
+
+10. **Sortierung nach Impact, Ressourcenverbrauch, Komplexität.** Drei neue
+    Bewertungsfelder je Ticket (Niedrig/Mittel/Hoch) plus ein
+    „Sortieren nach"-Auswahlfeld (zusätzlich RCA-Häufigkeit). Die Sortierung
+    wirkt sowohl auf die flache Liste als auch — als Reihenfolge der Gruppen
+    und innerhalb der Gruppen — im konsolidierten Modus.
+
+11. **Präventionsfokus.** Das Maßnahmenfeld ist als
+    „Fix-/Präventionsmaßnahme (verhindert Wiederholung)" gekennzeichnet.
+    Ältere gespeicherte Datensätze werden um die neuen Felder ergänzt
+    (Backfill), ohne bestehende Eingaben zu verlieren.

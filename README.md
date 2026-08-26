@@ -1,10 +1,21 @@
 # RCA-Ticket-Analyzer
 
-Portable, vollständig offline laufende Single-File-Webanwendung zur Auswertung von
-Jira-/CRM-Ticket-Exporten (CSV). Die App clustert Tickets zu wiederkehrenden
-Root-Cause-Mustern, priorisiert RCA-Fokusthemen nach Häufigkeit und erfasst je
-Ticket ein Feedback (Status, Root-Cause-Familie, Evidenz, Priorität, Maßnahme,
-Notizen).
+Portable, vollständig offline laufende Single-File-Webanwendung zum Verwalten von
+Incident-Tickets: importierte oder manuell angelegte Tickets werden ausgewertet,
+um Root Causes zu ermitteln und Maßnahmen festzuhalten, die eine Wiederholung des
+Incidents verhindern. Die App konsolidiert Tickets automatisch zu wiederkehrenden
+Root-Cause-Gruppen, priorisiert RCA-Fokusthemen nach Häufigkeit und erfasst je
+Ticket ein Feedback (Status, Root-Cause-Familie, Evidenz, Impact,
+Ressourcenverbrauch, Komplexität, Priorität, Präventionsmaßnahme, Notizen).
+
+## Funktionen
+
+- **Import & manuelle Anlage**: CSV-Import *und* manuelles Anlegen einzelner
+  Incidents; beide Quellen werden gemeinsam analysiert.
+- **Konsolidierung**: automatische Gruppierung nach Root-Cause-Muster, optional
+  als konsolidierte Tabellenansicht mit Gruppenköpfen.
+- **Priorisierung & Sortierung**: nach Impact, Ressourcenverbrauch, Komplexität
+  oder RCA-Häufigkeit.
 
 ## Nutzung
 
